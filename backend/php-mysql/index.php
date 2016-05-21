@@ -1,40 +1,75 @@
 <?php
 	set_time_limit(0);
+
 	function setup_saveloadlist() {
 		define("SERVER","localhost");
-		define("USER","");
+		define("USER","root");
 		define("PASSWORD","");
-		define("DB","home");
+		define("DB","test");
 		define("TABLE","wwwsqldesigner");
 	}
+
 	function setup_import() {
 		define("SERVER","localhost");
-		define("USER","");
+		define("USER","root");
 		define("PASSWORD","");
 		define("DB","information_schema");
 	}
-	class mysqlDB {
+
+	class mysqlDB
+    {
 		var $_conn;
+
 		function connect() {
 			$conn = mysqli_connect(SERVER,USER,PASSWORD);
 			$this->setLink($conn);
+
 			if (!$this->getLink()){
 				return false;
 			}
+
 			$res = mysqli_select_db($this->getLink(), DB);
+
 			if (!$res){
 				// Data Base Not configured
 				echo "You have to configure the DataBase";
 				return false;
 			}
+
 			return true;
 		}
+
 		function getLink(){
 			return $this->_conn;
 		}
+
 		function setLink($conn){
 			$this->_conn = $conn;
 		}
+
+        /**
+         *
+         *
+         * @param $cols
+         * @param filterCols $
+         * @return mixed
+         */
+        /**
+         * @param array $cols
+         * @param array $
+         */
+        function filterCols($name)
+        {
+            // primary key
+            if($name == 'id')
+                return true;
+
+            // FK
+            if(strstr($name,'_id'))
+                return true;
+
+            return false;
+        }
 
 		function import() {
 			$db = (isset($_GET["database"]) ? $_GET["database"] : "information_schema");
@@ -51,15 +86,30 @@
 
 			$result = mysqli_query($this->getLink(), "SELECT * FROM TABLES WHERE TABLE_SCHEMA = '".$db."'");
 			while ($row = mysqli_fetch_array($result)) {
+
+                // Tabelle 'wwwsqldesigner' nicht anzeigen
+                if($row['TABLE_NAME'] == 'wwwsqldesigner')
+                    continue;
+
 				$table = $row["TABLE_NAME"];
 				$xml .= '<table name="'.$table.'">';
 				$comment = (isset($row["TABLE_COMMENT"]) ? $row["TABLE_COMMENT"] : "");
 				if ($comment) { $xml .= '<comment>'.htmlspecialchars($comment).'</comment>'; }
 
+                // abfragen Spalten einer Tabelle
 				$q = "SELECT * FROM COLUMNS WHERE TABLE_NAME = '".$table."' AND TABLE_SCHEMA = '".$db."'";
 				$result2 = mysqli_query($this->getLink(), $q);
-				while ($row = mysqli_fetch_array($result2)) {
+
+				while ($row = mysqli_fetch_array($result2))
+                {
 					$name  = $row["COLUMN_NAME"];
+
+                    // Filter PK und FK
+                    $weiter = $this->filterCols($name);
+
+                    if($weiter === false)
+                        continue;
+
 					$type  = $row["COLUMN_TYPE"];
 					$comment = (isset($row["COLUMN_COMMENT"]) ? $row["COLUMN_COMMENT"] : "");
 					$null = ($row["IS_NULLABLE"] == "YES" ? "1" : "0");
@@ -155,10 +205,12 @@
 		case "save":
 			setup_saveloadlist();
 			$DBHandler = new mysqlDB();
+
 			if (!$DBHandler->connect()) {
 				header("HTTP/1.0 503 Service Unavailable");
 				break;
 			}
+
 			$keyword = (isset($_GET["keyword"]) ? $_GET["keyword"] : "");
 			$keyword = mysqli_real_escape_string($DBHandler->getLink(), $keyword);
 			$data = file_get_contents("php://input");
